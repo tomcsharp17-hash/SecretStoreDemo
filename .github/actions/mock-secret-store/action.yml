@@ -1,5 +1,5 @@
 name: 'Mock Secret Store'
-description: 'Gia lap secret-store tren Windows'
+description: 'Gia lap secret-store tren Windows dung PowerShell'
 
 runs:
   using: 'composite'
@@ -7,25 +7,35 @@ runs:
     - name: Setup Mock CLI Tool for Windows
       shell: pwsh
       run: |
+        # Tao thu muc luu secret trong Temp
         $storeDir = Join-Path $env:TEMP "mock_secret_store"
         New-Item -ItemType Directory -Force -Path $storeDir | Out-Null
 
+        # Tao thu muc bin va add vao GITHUB_PATH
         $binDir = Join-Path $env:USERPROFILE ".local\bin"
         New-Item -ItemType Directory -Force -Path $binDir | Out-Null
         "$binDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-        $cmdPath = Join-Path $binDir "secret-store.cmd"
+        # Tao file PowerShell script gia lap secret-store.ps1
+        $psScriptPath = Join-Path $binDir "secret-store.ps1"
         @'
-        @echo off
-        set COMMAND=%1
-        set ARG=%2
-        set STORE_DIR=%TEMP%\mock_secret_store
-
-        if "%COMMAND%"=="store-secret" (
-            set "HANDLE=handle-%RANDOM%"
-            echo %ARG% > "%STORE_DIR%\%HANDLE%"
-            echo %HANDLE%
-        ) else if "%COMMAND%"=="retrieve-secret" (
-            type "%STORE_DIR%\%ARG%" 2>nul
+        param (
+            [string]$Command,
+            [string]$Arg
         )
-        '@ | Out-File -FilePath $cmdPath -Encoding ascii
+
+        $storeDir = Join-Path $env:TEMP "mock_secret_store"
+
+        if ($Command -eq "store-secret") {
+            $handle = "handle-$((Get-Random))"
+            $filePath = Join-Path $storeDir $handle
+            $Arg | Out-File -FilePath $filePath -Encoding utf8 -NoNewline
+            Write-Output $handle
+        }
+        elseif ($Command -eq "retrieve-secret") {
+            $filePath = Join-Path $storeDir $Arg
+            if (Test-Path $filePath) {
+                Get-Content -Path $filePath -Raw
+            }
+        }
+        '@ | Out-File -FilePath $psScriptPath -Encoding utf8
